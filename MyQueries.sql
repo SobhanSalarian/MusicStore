@@ -88,6 +88,32 @@ UPDATE chinook.invoice SET invoiceYear = SUBSTR(InvoiceDate, 1, 4);
  group by inv.invoiceYear
  order by count(invl.InvoiceLineId) desc
   ;
+  
+-- 9 
+WITH TotalSales AS (
+    SELECT SUM(inv.Total) AS total_sales
+    FROM chinook.invoice inv
+),
+MeanSales AS (
+    SELECT total_sales / (SELECT COUNT(DISTINCT CustomerId) FROM chinook.invoice) AS mean_sales
+    FROM TotalSales
+)
+SELECT c.CustomerId, c.LastName, SUM(inv.Total) AS customer_total
+FROM chinook.customer c
+JOIN chinook.invoice inv ON inv.CustomerId = c.CustomerId
+GROUP BY c.CustomerId, c.LastName
+HAVING SUM(inv.Total) > (SELECT mean_sales FROM MeanSales)
+order by customer_total desc
+;
+
+
+
+
+
+
+
+
+
 
 
 
