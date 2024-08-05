@@ -16,6 +16,7 @@ join chinook.invoiceline invl on t.TrackId = invl.TrackId
 join chinook.invoice inv on invl.InvoiceId = inv.InvoiceId
 group by g.GenreId
 ORDER BY Total$  DESC
+limit 1
 ;
 
 -- 3 
@@ -51,44 +52,36 @@ order by NumOfGeners desc
 
 -- 7 
 
-select g.GenreId , g.Name , t.Name , count(inv.InvoiceId) , sum(inv.Total) from chinook.genre g 
-join chinook.track t on g.GenreId = t.GenreId
-join chinook.invoiceline invl on invl.TrackId = t.TrackId
-join chinook.invoice inv on invl.InvoiceId = inv.InvoiceId
-group by g.GenreId, g.Name, t.Name
-;
- 
- 
- -- 7 
- WITH TrackSales AS (
-    SELECT g.GenreId, g.Name AS GenreName, t.TrackId, t.Name AS TrackName,SUM(inv.Total) AS TotalSales FROM chinook.genre g 
+ WITH GenreSongTotals AS (
+    SELECT g.GenreId, g.Name AS GenreName, t.Name AS TrackName, SUM(inv.Total) AS TotalInvoiceSum,
+	ROW_NUMBER() OVER (PARTITION BY g.GenreId ORDER BY SUM(inv.Total) DESC) AS RowNum
+    FROM chinook.genre g
     JOIN chinook.track t ON g.GenreId = t.GenreId
     JOIN chinook.invoiceline invl ON invl.TrackId = t.TrackId
     JOIN chinook.invoice inv ON invl.InvoiceId = inv.InvoiceId
-    GROUP BY g.GenreId, g.Name, t.TrackId, t.Name
-),
-RankedTracks AS (
-    SELECT GenreId, GenreName, TrackId, TrackName, TotalSales,
-        ROW_NUMBER() OVER (PARTITION BY GenreId ORDER BY TotalSales DESC) AS TrackRank FROM TrackSales
+    GROUP BY g.GenreId, g.Name, t.Name
 )
-SELECT GenreId, GenreName, TrackId, TrackName, TotalSales FROM RankedTracks
-WHERE TrackRank <= 3
-ORDER BY GenreId, TrackRank;
-
+SELECT GenreId, GenreName, TrackName, TotalInvoiceSum FROM GenreSongTotals
+WHERE RowNum <= 3
+ORDER BY GenreId, TotalInvoiceSum DESC;
 
 -- 8 
  -- makin a new column for the year 
+ -- for separating the year out of the invoicedate 
 ALTER TABLE chinook.invoice ADD COLUMN invoiceYear INT;
 SET SQL_SAFE_UPDATES = 0;
 UPDATE chinook.invoice SET invoiceYear = SUBSTR(InvoiceDate, 1, 4);
  SET SQL_SAFE_UPDATES = 1;
- 
- select inv.invoiceYear year , count(invl.InvoiceLineId) CountOfSalesTracks from chinook.invoice inv
- join chinook.invoiceline invl on inv.InvoiceId = invl.InvoiceId
- group by inv.invoiceYear
- order by count(invl.InvoiceLineId) desc
-  ;
-  
+-- now this part 
+with salesbyyear as (
+    select inv.invoiceyear as year, count(invl.invoicelineid) as countofsalestracks from chinook.invoice inv
+    join chinook.invoiceline invl on inv.invoiceid = invl.invoiceid
+    group by inv.invoiceyear
+)
+select year, countofsalestracks, sum(countofsalestracks) over (order by year) as cumulativesalestracks from salesbyyear
+order by year;
+
+
 -- 9 
 WITH TotalSales AS (
     SELECT SUM(inv.Total) AS total_sales
